@@ -93,6 +93,22 @@ interface MediGuardContextType {
   // Batch CSV Ingestion
   addBatchesFromCSV: (rows: ParsedCSVBatchRow[]) => { successCount: number; errors: string[] };
 
+  // Manual Medicine & Batch Intake
+  addNewMedicineWithBatch: (params: {
+    brandName: string;
+    genericName: string;
+    category: string;
+    batchCode: string;
+    expiresOn: string;
+    quantity: number;
+    unitCostPaise: number;
+    storageRequirement?: 'AMBIENT' | 'COLD_CHAIN' | 'CONTROLLED_SUBSTANCE';
+    unit?: string;
+    packageSize?: number;
+    locationId?: string;
+    image?: string;
+  }) => { success: boolean; message: string; batchId?: string };
+
   // Transactions
   postMovement: (params: Omit<PostMovementParams, 'actor' | 'nowDateStr'>) => void;
   proposeTransfer: (batchId: string, sourceLocId: string, destLocId: string, qty: number, rationale: string) => void;
@@ -1116,6 +1132,164 @@ export const MediGuardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return { successCount, errors };
   };
 
+  // Manual Medicine & Batch Intake
+  const addNewMedicineWithBatch = (params: {
+    brandName: string;
+    genericName: string;
+    category: string;
+    batchCode: string;
+    expiresOn: string;
+    quantity: number;
+    unitCostPaise: number;
+    storageRequirement?: 'AMBIENT' | 'COLD_CHAIN' | 'CONTROLLED_SUBSTANCE';
+    unit?: string;
+    packageSize?: number;
+    locationId?: string;
+    image?: string;
+  }) => {
+    const trimmedBrand = params.brandName.trim();
+    const trimmedGeneric = params.genericName.trim();
+    const cleanCode = params.batchCode.trim().toUpperCase();
+
+    if (!trimmedBrand && !trimmedGeneric) {
+      return { success: false, message: 'Please provide either a brand name or generic formula name.' };
+    }
+    if (!cleanCode) {
+      return { success: false, message: 'Batch number/code is required.' };
+    }
+    if (!params.expiresOn || isNaN(Date.parse(params.expiresOn))) {
+      return { success: false, message: 'Valid expiry date (YYYY-MM-DD) is required.' };
+    }
+    if (!params.quantity || params.quantity <= 0) {
+      return { success: false, message: 'Quantity must be greater than zero.' };
+    }
+
+    // 1. Locate or create Medicine
+    let med = medicines.find(
+      (m) =>
+        (trimmedBrand && m.brandName && m.brandName.toLowerCase() === trimmedBrand.toLowerCase()) ||
+        (trimmedGeneric && m.genericName.toLowerCase() === trimmedGeneric.toLowerCase())
+    );
+
+    let createdMed: Medicine | null = null;
+    if (!med) {
+      const cleanSku = (trimmedBrand || trimmedGeneric)
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '-')
+        .slice(0, 14);
+
+      createdMed = {
+        id: `MED-${cleanSku}-${Date.now().toString().slice(-4)}`,
+        sku: cleanSku,
+        genericName: trimmedGeneric || trimmedBrand,
+        brandName: trimmedBrand || undefined,
+        category: params.category || 'ANTIBIOTIC',
+        unit: params.unit || 'strip',
+        unitCostPaise: params.unitCostPaise || 2000,
+        storageRequirement: params.storageRequirement || 'AMBIENT',
+        packageSize: params.packageSize || 10,
+        criticality: 'MEDIUM',
+        image:
+          params.image ||
+          (params.storageRequirement === 'COLD_CHAIN'
+            ? 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200&auto=format&fit=crop&q=80'
+            : 'https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=200&auto=format&fit=crop&q=80'),
+        active: true,
+      };
+
+      setMedicines((prev) => {
+        const next = [...prev, createdMed!];
+        localStorage.setItem(STORAGE_KEYS.MEDICINES, JSON.stringify(next));
+        return next;
+      });
+      med = createdMed;
+    }
+
+    // 2. Batch Creation
+    const batchId = `BATCH-${cleanCode.replace(/[^A-Z0-9]/g, '-')}`;
+    const targetLocId =
+      params.locationId && locations.some((l) => l.id === params.locationId)
+        ? params.locationId
+        : currentUser.assignedLocationId && locations.some((l) => l.id === currentUser.assignedLocationId)
+        ? currentUser.assignedLocationId
+        : 'LOC-CENTRAL';
+
+    const existingBatch = batches.find((b) => b.id === batchId || b.batchCode === cleanCode);
+
+    if (existingBatch) {
+      // Just increase stock in target location
+      setBalances((prev) => {
+        const next = [...prev];
+        const idx = next.findIndex((b) => b.batchId === existingBatch.id && b.locationId === targetLocId);
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], quantity: next[idx].quantity + params.quantity };
+        } else {
+          next.push({ batchId: existingBatch.id, locationId: targetLocId, quantity: params.quantity, version: 1 });
+        }
+        localStorage.setItem(STORAGE_KEYS.BALANCES, JSON.stringify(next));
+        return next;
+      });
+    } else {
+      const newBatch: Batch = {
+        id: batchId,
+        medicineId: med.id,
+        supplierId: suppliers[0]?.id || 'SUP-01',
+        batchCode: cleanCode,
+        receivedOn: `${rules.demoFixedDate}`,
+        expiresOn: params.expiresOn,
+        unitCostPaise: params.unitCostPaise || med.unitCostPaise,
+        status: 'ACTIVE',
+      };
+
+      setBatches((prev) => {
+        const next = [...prev, newBatch];
+        localStorage.setItem(STORAGE_KEYS.BATCHES, JSON.stringify(next));
+        return next;
+      });
+
+      setBalances((prev) => {
+        const next = [...prev, { batchId, locationId: targetLocId, quantity: params.quantity, version: 1 }];
+        localStorage.setItem(STORAGE_KEYS.BALANCES, JSON.stringify(next));
+        return next;
+      });
+    }
+
+    // 3. Movement Ledger
+    const newMovement: StockMovement = {
+      id: `MOV-ADD-${Date.now()}`,
+      idempotencyKey: `KEY-ADD-${batchId}-${Date.now()}`,
+      batchId: existingBatch ? existingBatch.id : batchId,
+      type: 'RECEIPT',
+      fromLocationId: null,
+      toLocationId: targetLocId,
+      quantity: params.quantity,
+      actorId: currentUser.id,
+      occurredAt: `${rules.demoFixedDate}T12:00:00Z`,
+      reason: `Manual medicine registration by ${currentUser.facilityName || currentUser.name}`,
+    };
+
+    setMovements((prev) => {
+      const next = [newMovement, ...prev];
+      localStorage.setItem(STORAGE_KEYS.MOVEMENTS, JSON.stringify(next));
+      return next;
+    });
+
+    // 4. Notification
+    addNotification({
+      type: 'BATCH_IMPORT',
+      title: 'Medicine Added to Inventory',
+      message: `${trimmedBrand || trimmedGeneric} (Batch ${cleanCode}) — ${params.quantity} units added. Expiry: ${params.expiresOn}.`,
+      actionScreen: 'inventory',
+      severity: 'info',
+    });
+
+    return {
+      success: true,
+      message: `Successfully added ${trimmedBrand || trimmedGeneric} (${params.quantity} units, Batch ${cleanCode}) to inventory.`,
+      batchId,
+    };
+  };
+
   const resetDemoData = () => {
     localStorage.clear();
     setBatches(SEED_BATCHES);
@@ -1184,6 +1358,7 @@ export const MediGuardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         clearNotifications,
         addNotification,
         addBatchesFromCSV,
+        addNewMedicineWithBatch,
         postMovement,
         proposeTransfer,
         decideTransfer,
