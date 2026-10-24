@@ -167,17 +167,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* Overlay Metric Pill */}
-            <div className="absolute -bottom-5 -left-4 bg-white border border-[#E7E5E4] p-4 rounded-xl shadow-md flex items-center gap-3.5 text-xs card-hover-lift">
-              <div className="w-10 h-10 rounded-lg bg-[#DCFCE7] text-[#15803D] flex items-center justify-center font-bold shrink-0">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="font-bold text-[#1C1917] text-sm">₹4,20,000+ Waste Prevented</div>
-                <div className="text-[#78716C]">Via Inter-Ward & Chemist Redistribution</div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
