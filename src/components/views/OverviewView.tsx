@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   UploadCloud,
   FileText,
@@ -35,6 +35,8 @@ import { formatPaiseINR } from '../../engines/reorder';
 import { BatchCsvUploadModal } from '../inventory/BatchCsvUploadModal';
 import { BarcodeModal } from '../inventory/BarcodeModal';
 
+export type ExpiryFilterType = 'ALL' | 'CRITICAL' | 'WARNING' | 'SAFE' | 'AT_RISK' | 'LE_20' | '21_30' | '31_60';
+
 interface OverviewViewProps {
   onNavigate: (screen: NavScreen) => void;
 }
@@ -59,10 +61,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ onNavigate }) => {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [expiryFilter, setExpiryFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING' | 'SAFE'>('ALL');
+  const [expiryFilter, setExpiryFilter] = useState<ExpiryFilterType>('ALL');
   const [selectedLocFilter, setSelectedLocFilter] = useState<string>('ALL');
   const [displayMode, setDisplayMode] = useState<'table' | 'cards'>('cards');
   const [csvQuickSuccess, setCsvQuickSuccess] = useState<string | null>(null);
+
+  const medicinesSectionRef = useRef<HTMLDivElement>(null);
+
+  const handleCardClick = (filter: ExpiryFilterType) => {
+    setExpiryFilter((prev) => (prev === filter && filter !== 'ALL' ? 'ALL' : filter));
+    setTimeout(() => {
+      medicinesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
 
   // Storage facility showcase cards with real imagery
   const storageShowcase = [
@@ -147,6 +158,29 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ onNavigate }) => {
     });
   }, [batches, medicines, balances, locations, rules, isLocalChemist, currentUser]);
 
+  // Memoized batch counts by risk windows
+  const riskCounts = useMemo(() => {
+    const total = allMedicineBatches.length;
+    const atRisk = allMedicineBatches.filter((b) => b.expiry.daysToExpiry <= 60 && b.expiry.daysToExpiry > 0).length;
+    const critical30 = allMedicineBatches.filter((b) => b.expiry.daysToExpiry <= 30 && b.expiry.daysToExpiry > 0).length;
+    const warning60 = allMedicineBatches.filter((b) => b.expiry.daysToExpiry > 30 && b.expiry.daysToExpiry <= 60).length;
+    const le20 = allMedicineBatches.filter((b) => b.expiry.daysToExpiry <= 20 && b.expiry.daysToExpiry > 0).length;
+    const range21_30 = allMedicineBatches.filter((b) => b.expiry.daysToExpiry > 20 && b.expiry.daysToExpiry <= 30).length;
+    const range31_60 = allMedicineBatches.filter((b) => b.expiry.daysToExpiry > 30 && b.expiry.daysToExpiry <= 60).length;
+    const safe = allMedicineBatches.filter((b) => b.expiry.daysToExpiry > 60).length;
+
+    return {
+      total,
+      atRisk,
+      critical30,
+      warning60,
+      le20,
+      range21_30,
+      range31_60,
+      safe,
+    };
+  }, [allMedicineBatches]);
+
   // Filtered batches for the table/cards
   const filteredBatches = useMemo(() => {
     return allMedicineBatches.filter((item) => {
@@ -161,8 +195,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ onNavigate }) => {
       if (!matchesSearch) return false;
 
       // Expiry filter
-      if (expiryFilter === 'CRITICAL' && item.expiry.daysToExpiry > 30) return false;
+      if (expiryFilter === 'CRITICAL' && (item.expiry.daysToExpiry > 30 || item.expiry.daysToExpiry <= 0)) return false;
       if (expiryFilter === 'WARNING' && (item.expiry.daysToExpiry <= 30 || item.expiry.daysToExpiry > 60)) return false;
+      if (expiryFilter === 'AT_RISK' && (item.expiry.daysToExpiry > 60 || item.expiry.daysToExpiry <= 0)) return false;
+      if (expiryFilter === 'LE_20' && (item.expiry.daysToExpiry > 20 || item.expiry.daysToExpiry <= 0)) return false;
+      if (expiryFilter === '21_30' && (item.expiry.daysToExpiry <= 20 || item.expiry.daysToExpiry > 30)) return false;
+      if (expiryFilter === '31_60' && (item.expiry.daysToExpiry <= 30 || item.expiry.daysToExpiry > 60)) return false;
       if (expiryFilter === 'SAFE' && item.expiry.daysToExpiry <= 60) return false;
 
       // Location filter
@@ -323,58 +361,158 @@ Augmentin 625,AUG-2026-D,2026-12-10,100,LOC-EMERGENCY,19800`;
         </div>
       )}
 
-      {/* 2. Key Metrics Summary Grid with Modern Animations */}
+      {/* 2. Key Metrics Summary Grid with Interactive Expiry Filtering Buttons */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-white border border-[#E7E5E4] rounded-xl p-4 shadow-2xs card-hover-lift">
-          <div className="text-2xl font-bold text-[#1C1917] tabular-nums">
-            {medicines.length}
+        {/* Card 1: Catalog Medicines */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleCardClick('ALL')}
+          onKeyDown={(e) => e.key === 'Enter' && handleCardClick('ALL')}
+          className={`bg-white border rounded-xl p-4 shadow-2xs card-hover-lift cursor-pointer transition-all flex flex-col justify-between ${
+            expiryFilter === 'ALL'
+              ? 'border-[#C2410C] ring-2 ring-[#C2410C]/20 bg-[#FFF7ED]/30'
+              : 'border-[#E7E5E4] hover:border-[#C2410C]'
+          }`}
+          title="Click to view all formulations"
+        >
+          <div>
+            <div className="text-2xl font-bold text-[#1C1917] tabular-nums">
+              {medicines.length}
+            </div>
+            <div className="text-xs text-[#78716C] mt-1 font-medium">Catalog Medicines</div>
+            <div className="text-[10px] text-[#78716C] flex items-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#15803D]" />
+              <span>Active Formulations</span>
+            </div>
           </div>
-          <div className="text-xs text-[#78716C] mt-1 font-medium">Catalog Medicines</div>
-          <div className="text-[10px] text-[#78716C] flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#15803D]" />
-            <span>Active Formulations</span>
+          <div className="text-[10px] text-[#C2410C] font-semibold pt-2 border-t border-[#E7E5E4]/60 flex items-center justify-between">
+            <span>Show All</span>
+            <ArrowRight className="w-3 h-3" />
           </div>
         </div>
 
-        <div className="bg-white border border-[#E7E5E4] rounded-xl p-4 shadow-2xs card-hover-lift">
-          <div className="text-2xl font-bold text-[#1C1917] tabular-nums">
-            {batches.length}
+        {/* Card 2: Active Batches */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleCardClick('ALL')}
+          onKeyDown={(e) => e.key === 'Enter' && handleCardClick('ALL')}
+          className="bg-white border border-[#E7E5E4] hover:border-[#C2410C] rounded-xl p-4 shadow-2xs card-hover-lift cursor-pointer transition-all flex flex-col justify-between"
+          title="Click to view all active batches"
+        >
+          <div>
+            <div className="text-2xl font-bold text-[#1C1917] tabular-nums">
+              {batches.length}
+            </div>
+            <div className="text-xs text-[#78716C] mt-1 font-medium">Active Batches</div>
+            <div className="text-[10px] text-[#78716C] mt-0.5">Monitored on Shelves</div>
           </div>
-          <div className="text-xs text-[#78716C] mt-1 font-medium">Active Batches</div>
-          <div className="text-[10px] text-[#78716C]">Monitored on Shelves</div>
+          <div className="text-[10px] text-[#78716C] font-medium pt-2 border-t border-[#E7E5E4]/60 flex items-center justify-between">
+            <span>All Batches</span>
+            <ArrowRight className="w-3 h-3" />
+          </div>
         </div>
 
-        <div className="bg-white border border-[#FEE2E2] rounded-xl p-4 shadow-2xs bg-gradient-to-b from-white to-[#FEF2F2] card-hover-lift">
-          <div className="text-2xl font-bold text-[#B91C1C] tabular-nums flex items-center gap-1.5">
-            <span>{allMedicineBatches.filter((b) => b.expiry.daysToExpiry <= 30 && b.expiry.daysToExpiry > 0).length}</span>
-            <span className="w-2 h-2 rounded-full bg-[#B91C1C] animate-ping" />
+        {/* Card 3: Critical (<= 30 Days) */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleCardClick('CRITICAL')}
+          onKeyDown={(e) => e.key === 'Enter' && handleCardClick('CRITICAL')}
+          className={`rounded-xl p-4 shadow-2xs card-hover-lift cursor-pointer transition-all flex flex-col justify-between ${
+            expiryFilter === 'CRITICAL'
+              ? 'bg-red-50/80 border-[#B91C1C] ring-2 ring-[#B91C1C]/30 shadow-md'
+              : 'bg-gradient-to-b from-white to-[#FEF2F2] border-[#FEE2E2] hover:border-[#B91C1C]'
+          }`}
+          title="Click to filter medicines expiring in <= 30 days"
+        >
+          <div>
+            <div className="text-2xl font-bold text-[#B91C1C] tabular-nums flex items-center gap-1.5">
+              <span>{riskCounts.critical30}</span>
+              <span className="w-2 h-2 rounded-full bg-[#B91C1C] animate-ping" />
+            </div>
+            <div className="text-xs text-[#B91C1C] mt-1 font-bold">Critical (&le; 30 Days)</div>
+            <div className="text-[10px] text-[#B91C1C] mt-0.5">FEFO Priority Burn</div>
           </div>
-          <div className="text-xs text-[#B91C1C] mt-1 font-bold">Critical (&le; 30 Days)</div>
-          <div className="text-[10px] text-[#B91C1C]">FEFO Priority Burn</div>
+          <div className="text-[10px] text-[#B91C1C] font-bold pt-2 border-t border-red-200/80 flex items-center justify-between">
+            <span>{expiryFilter === 'CRITICAL' ? '● Filtering Active' : 'Filter ≤30d Meds'}</span>
+            <ArrowRight className="w-3 h-3" />
+          </div>
         </div>
 
-        <div className="bg-white border border-[#FEF08A] rounded-xl p-4 shadow-2xs bg-gradient-to-b from-white to-[#FEFCE8] card-hover-lift">
-          <div className="text-2xl font-bold text-[#A16207] tabular-nums">
-            {allMedicineBatches.filter((b) => b.expiry.daysToExpiry > 30 && b.expiry.daysToExpiry <= 60).length}
+        {/* Card 4: Warning (31-60 Days) */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleCardClick('WARNING')}
+          onKeyDown={(e) => e.key === 'Enter' && handleCardClick('WARNING')}
+          className={`rounded-xl p-4 shadow-2xs card-hover-lift cursor-pointer transition-all flex flex-col justify-between ${
+            expiryFilter === 'WARNING'
+              ? 'bg-amber-50/80 border-amber-500 ring-2 ring-amber-500/30 shadow-md'
+              : 'bg-gradient-to-b from-white to-[#FEFCE8] border-[#FEF08A] hover:border-amber-400'
+          }`}
+          title="Click to filter medicines expiring in 31–60 days"
+        >
+          <div>
+            <div className="text-2xl font-bold text-[#A16207] tabular-nums">
+              {riskCounts.warning60}
+            </div>
+            <div className="text-xs text-[#A16207] mt-1 font-bold">Warning (31–60 Days)</div>
+            <div className="text-[10px] text-[#A16207] mt-0.5">Supplier Return Window</div>
           </div>
-          <div className="text-xs text-[#A16207] mt-1 font-bold">Warning (31–60 Days)</div>
-          <div className="text-[10px] text-[#A16207]">Supplier Return Window</div>
+          <div className="text-[10px] text-amber-700 font-bold pt-2 border-t border-amber-200/80 flex items-center justify-between">
+            <span>{expiryFilter === 'WARNING' ? '● Filtering Active' : 'Filter 31–60d Meds'}</span>
+            <ArrowRight className="w-3 h-3" />
+          </div>
         </div>
 
-        <div className="bg-white border border-[#E7E5E4] rounded-xl p-4 shadow-2xs card-hover-lift">
-          <div className="text-2xl font-bold text-[#B91C1C] tabular-nums">
-            {formatPaiseINR(kpiStats.projectedAtRiskPaise)}
+        {/* Card 5: At-Risk Capital */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleCardClick('AT_RISK')}
+          onKeyDown={(e) => e.key === 'Enter' && handleCardClick('AT_RISK')}
+          className={`rounded-xl p-4 shadow-2xs card-hover-lift cursor-pointer transition-all flex flex-col justify-between ${
+            expiryFilter === 'AT_RISK'
+              ? 'bg-orange-50/80 border-[#C2410C] ring-2 ring-[#C2410C]/30 shadow-md'
+              : 'bg-white border-[#E7E5E4] hover:border-[#C2410C]'
+          }`}
+          title="Click to filter all at-risk medicines (<= 60 days)"
+        >
+          <div>
+            <div className="text-2xl font-bold text-[#B91C1C] tabular-nums">
+              {formatPaiseINR(kpiStats.projectedAtRiskPaise)}
+            </div>
+            <div className="text-xs text-[#78716C] mt-1 font-medium">At-Risk Capital (₹)</div>
+            <div className="text-[10px] text-[#78716C] mt-0.5">Protected by Swasti</div>
           </div>
-          <div className="text-xs text-[#78716C] mt-1 font-medium">At-Risk Capital (₹)</div>
-          <div className="text-[10px] text-[#78716C]">Protected by Swasti</div>
+          <div className="text-[10px] text-[#C2410C] font-bold pt-2 border-t border-orange-200/80 flex items-center justify-between">
+            <span>{expiryFilter === 'AT_RISK' ? '● Filtering Active' : 'Filter At-Risk Meds'}</span>
+            <ArrowRight className="w-3 h-3" />
+          </div>
         </div>
 
-        <div className="bg-white border border-[#E7E5E4] rounded-xl p-4 shadow-2xs card-hover-lift">
-          <div className="text-2xl font-bold text-[#15803D] tabular-nums">
-            {allMedicineBatches.reduce((acc, curr) => acc + curr.totalUnits, 0)}
+        {/* Card 6: Total Units in Stock */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleCardClick('ALL')}
+          onKeyDown={(e) => e.key === 'Enter' && handleCardClick('ALL')}
+          className="bg-white border border-[#E7E5E4] hover:border-[#15803D] rounded-xl p-4 shadow-2xs card-hover-lift cursor-pointer transition-all flex flex-col justify-between"
+          title="Click to view all stock in inventory"
+        >
+          <div>
+            <div className="text-2xl font-bold text-[#15803D] tabular-nums">
+              {allMedicineBatches.reduce((acc, curr) => acc + curr.totalUnits, 0)}
+            </div>
+            <div className="text-xs text-[#78716C] mt-1 font-medium">Total Units in Stock</div>
+            <div className="text-[10px] text-[#15803D] font-medium mt-0.5">Reconciled Ledger</div>
           </div>
-          <div className="text-xs text-[#78716C] mt-1 font-medium">Total Units in Stock</div>
-          <div className="text-[10px] text-[#15803D] font-medium">Reconciled Ledger</div>
+          <div className="text-[10px] text-[#15803D] font-medium pt-2 border-t border-emerald-100 flex items-center justify-between">
+            <span>Show Inventory</span>
+            <ArrowRight className="w-3 h-3" />
+          </div>
         </div>
       </div>
 
@@ -426,7 +564,10 @@ Augmentin 625,AUG-2026-D,2026-12-10,100,LOC-EMERGENCY,19800`;
       </div>
 
       {/* 4. Central Medicines & Expiry Management Section */}
-      <div className="bg-white border border-[#E7E5E4] rounded-2xl shadow-sm overflow-hidden space-y-4 p-5 sm:p-6 card-hover-lift">
+      <div
+        ref={medicinesSectionRef}
+        className="bg-white border border-[#E7E5E4] rounded-2xl shadow-sm overflow-hidden space-y-4 p-5 sm:p-6 card-hover-lift scroll-mt-6"
+      >
         {/* Table / Cards Controls */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#E7E5E4]">
           <div className="flex-1 max-w-md relative">
@@ -469,8 +610,8 @@ Augmentin 625,AUG-2026-D,2026-12-10,100,LOC-EMERGENCY,19800`;
               </button>
             </div>
 
-            {/* Expiry Urgency Filter */}
-            <div className="flex items-center bg-[#FAFAF9] p-1 rounded-lg border border-[#E7E5E4] text-xs font-medium">
+            {/* Expiry Urgency Filter Pills (Linked to Top Buttons) */}
+            <div className="flex items-center bg-[#FAFAF9] p-1 rounded-lg border border-[#E7E5E4] text-xs font-medium flex-wrap gap-1">
               <button
                 onClick={() => setExpiryFilter('ALL')}
                 className={`px-2.5 py-1 rounded text-xs transition-colors ${
@@ -479,40 +620,67 @@ Augmentin 625,AUG-2026-D,2026-12-10,100,LOC-EMERGENCY,19800`;
                     : 'text-[#78716C] hover:text-[#1C1917]'
                 }`}
               >
-                All ({allMedicineBatches.length})
+                All ({riskCounts.total})
               </button>
 
               <button
-                onClick={() => setExpiryFilter('CRITICAL')}
+                onClick={() => setExpiryFilter('AT_RISK')}
                 className={`px-2.5 py-1 rounded text-xs transition-colors ${
-                  expiryFilter === 'CRITICAL'
-                    ? 'bg-[#FEE2E2] text-[#B91C1C] font-semibold shadow-2xs'
+                  expiryFilter === 'AT_RISK'
+                    ? 'bg-[#FFF7ED] text-[#C2410C] font-bold shadow-2xs border border-[#FFEDD5]'
+                    : 'text-[#78716C] hover:text-[#C2410C]'
+                }`}
+                title="Filter all batches expiring in <= 60 days"
+              >
+                All At-Risk ({riskCounts.atRisk})
+              </button>
+
+              <button
+                onClick={() => setExpiryFilter('LE_20')}
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                  expiryFilter === 'LE_20'
+                    ? 'bg-[#FEE2E2] text-[#B91C1C] font-bold shadow-2xs border border-[#FECACA]'
                     : 'text-[#78716C] hover:text-[#B91C1C]'
                 }`}
+                title="Filter emergency batches expiring in <= 20 days"
               >
-                &le;30d ({allMedicineBatches.filter((b) => b.expiry.daysToExpiry <= 30 && b.expiry.daysToExpiry > 0).length})
+                &le;20d ({riskCounts.le20})
               </button>
 
               <button
-                onClick={() => setExpiryFilter('WARNING')}
+                onClick={() => setExpiryFilter('21_30')}
                 className={`px-2.5 py-1 rounded text-xs transition-colors ${
-                  expiryFilter === 'WARNING'
-                    ? 'bg-[#FEF9C3] text-[#A16207] font-semibold shadow-2xs'
+                  expiryFilter === '21_30'
+                    ? 'bg-[#FFF7ED] text-[#C2410C] font-bold shadow-2xs border border-[#FFEDD5]'
+                    : 'text-[#78716C] hover:text-[#C2410C]'
+                }`}
+                title="Filter batches expiring in 21–30 days"
+              >
+                21–30d ({riskCounts.range21_30})
+              </button>
+
+              <button
+                onClick={() => setExpiryFilter('31_60')}
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                  expiryFilter === '31_60'
+                    ? 'bg-[#FEF9C3] text-[#A16207] font-bold shadow-2xs border border-[#FEF08A]'
                     : 'text-[#78716C] hover:text-[#A16207]'
                 }`}
+                title="Filter batches expiring in 31–60 days"
               >
-                31–60d ({allMedicineBatches.filter((b) => b.expiry.daysToExpiry > 30 && b.expiry.daysToExpiry <= 60).length})
+                31–60d ({riskCounts.range31_60})
               </button>
 
               <button
                 onClick={() => setExpiryFilter('SAFE')}
                 className={`px-2.5 py-1 rounded text-xs transition-colors ${
                   expiryFilter === 'SAFE'
-                    ? 'bg-[#DCFCE7] text-[#15803D] font-semibold shadow-2xs'
+                    ? 'bg-[#DCFCE7] text-[#15803D] font-semibold shadow-2xs border border-[#BBF7D0]'
                     : 'text-[#78716C] hover:text-[#15803D]'
                 }`}
+                title="Filter safe batches expiring in > 60 days"
               >
-                &gt;60d ({allMedicineBatches.filter((b) => b.expiry.daysToExpiry > 60).length})
+                &gt;60d ({riskCounts.safe})
               </button>
             </div>
 
@@ -531,6 +699,40 @@ Augmentin 625,AUG-2026-D,2026-12-10,100,LOC-EMERGENCY,19800`;
             </select>
           </div>
         </div>
+
+        {/* Active Filter Notification Banner */}
+        {expiryFilter !== 'ALL' && (
+          <div className="p-3.5 bg-[#FFF7ED] border border-[#FFEDD5] rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-[#C2410C] shrink-0 animate-pulse" />
+              <span className="text-[#1C1917]">
+                Filtering medicines by risk window:{' '}
+                <strong className="text-[#C2410C]">
+                  {expiryFilter === 'CRITICAL'
+                    ? 'Critical Window (≤ 30 Days)'
+                    : expiryFilter === 'WARNING'
+                    ? 'Warning Window (31–60 Days)'
+                    : expiryFilter === 'AT_RISK'
+                    ? 'All At-Risk Medicines (≤ 60 Days)'
+                    : expiryFilter === 'LE_20'
+                    ? 'Emergency Window (≤ 20 Days)'
+                    : expiryFilter === '21_30'
+                    ? 'Priority Window (21–30 Days)'
+                    : expiryFilter === '31_60'
+                    ? 'Surveillance Window (31–60 Days)'
+                    : 'Safe Formulations (> 60 Days)'}
+                </strong>{' '}
+                &bull; <strong>{filteredBatches.length}</strong> {filteredBatches.length === 1 ? 'medicine batch' : 'medicine batches'} found
+              </span>
+            </div>
+            <button
+              onClick={() => setExpiryFilter('ALL')}
+              className="px-2.5 py-1 rounded-md bg-white border border-[#E7E5E4] hover:border-[#C2410C] text-[#C2410C] font-semibold text-xs transition-colors shadow-2xs flex items-center gap-1"
+            >
+              <span>Clear Filter & Show All</span>
+            </button>
+          </div>
+        )}
 
         {/* 4A. VISUAL CARD GRID VIEW (Modern with high-res medicine imagery) */}
         {displayMode === 'cards' && (
