@@ -4,12 +4,9 @@ import {
   RotateCcw,
   Sparkles,
   Home,
-  Users,
-  LayoutDashboard,
   Sliders,
   Bell,
   LogIn,
-  Bot,
 } from 'lucide-react';
 import { useMediGuard } from '../../context/MediGuardContext';
 import { UserRole } from '../../schemas';
@@ -59,54 +56,24 @@ export const TopBar: React.FC<TopBarProps> = ({
       {/* Left: Mode Switcher + Hospital Title */}
       <div className="flex items-center space-x-3">
         {onSwitchMainView && (
-          <div className="flex items-center bg-[#FAFAF9] p-1 rounded-lg border border-[#E7E5E4] mr-2">
-            <button
-              onClick={() => onSwitchMainView('landing')}
-              className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                activeMainView === 'landing'
-                  ? 'bg-white text-[#C2410C] shadow-xs border border-[#E7E5E4]'
-                  : 'text-[#78716C] hover:text-[#1C1917]'
-              }`}
-            >
-              <Home className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Overview</span>
-            </button>
-
-            <button
-              onClick={() => onSwitchMainView('login')}
-              className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                activeMainView === 'login'
-                  ? 'bg-white text-[#C2410C] shadow-xs border border-[#E7E5E4]'
-                  : 'text-[#78716C] hover:text-[#1C1917]'
-              }`}
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sign In</span>
-            </button>
-
-            <button
-              onClick={() => onSwitchMainView('profiles')}
-              className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                activeMainView === 'profiles'
-                  ? 'bg-white text-[#C2410C] shadow-xs border border-[#E7E5E4]'
-                  : 'text-[#78716C] hover:text-[#1C1917]'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Staff Profiles</span>
-            </button>
-
-            <button
-              onClick={() => onSwitchMainView('app')}
-              className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                activeMainView === 'app'
-                  ? 'bg-[#C2410C] text-white shadow-xs'
-                  : 'text-[#78716C] hover:text-[#1C1917]'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Decision Engine</span>
-            </button>
+          <div className="flex items-center mr-2">
+            {activeMainView === 'login' ? (
+              <button
+                onClick={() => onSwitchMainView('landing')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#E7E5E4] hover:border-[#C2410C] text-[#1C1917] hover:text-[#C2410C] text-xs font-semibold shadow-2xs transition-colors"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>Overview</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onSwitchMainView('login')}
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-semibold shadow-xs transition-colors"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         )}
 
