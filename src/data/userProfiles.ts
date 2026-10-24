@@ -1,0 +1,48 @@
+import { UserProfile } from '../types';
+
+export const USER_PROFILES: UserProfile[] = [
+  {
+    id: 'pharmacist',
+    name: 'Dr. Priya Sharma',
+    role: 'Chief Clinical Pharmacist',
+    department: 'Central Pharmacy & Therapeutics',
+    avatar: 'https://images.unsplash.com/photo-1594824813583-3606f36612e4?w=150&auto=format&fit=crop&q=80',
+    tagline: 'Know what to act on today and why — before ₹ is lost.',
+    keyResponsibility: 'Reviews high-risk batches, executes FEFO prioritization, approves returns and discards.',
+    defaultTab: 'today',
+    badges: ['Decision Engine', 'Clinical Sign-off', 'FEFO Queue'],
+  },
+  {
+    id: 'procurement',
+    name: 'Rajesh Kumar',
+    role: 'Head of Procurement & Supply Chain',
+    department: 'Hospital Materials Management',
+    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
+    tagline: 'Zero stockouts, zero over-ordering based on usable stock math.',
+    keyResponsibility: 'Generates ranked POs, tracks vendor lead times, reviews emergency stockout substitutes.',
+    defaultTab: 'procurement',
+    badges: ['Predictive POs', 'Lead Time Guard', 'CSV Export'],
+  },
+  {
+    id: 'ward_nurse',
+    name: 'Sister Anjali Nair',
+    role: 'Supervising Ward In-Charge',
+    department: 'Wards A & B Inpatient Care',
+    avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80',
+    tagline: 'Seamless inter-ward stock rebalancing and zero floor wastage.',
+    keyResponsibility: 'Monitors inbound/outbound medicine transfers and ward-level medicine availability.',
+    defaultTab: 'transfers',
+    badges: ['Ward Transfers', '1-Click Rebalance', 'Bedside Safety'],
+  },
+  {
+    id: 'director',
+    name: 'Dr. Vikram Malhotra',
+    role: 'Medical Director & Superintendent',
+    department: 'Hospital Executive Council',
+    avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
+    tagline: 'Institutional governance, regulatory compliance, and budget optimization.',
+    keyResponsibility: 'Monitors hospital-wide ₹ saved, quality hold compliance, and audit trails.',
+    defaultTab: 'today',
+    badges: ['Hospital KPIs', 'Audit Inspector', 'Governance'],
+  },
+];
