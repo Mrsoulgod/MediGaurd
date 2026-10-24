@@ -10,6 +10,14 @@ import {
   X,
   Camera,
   UploadCloud,
+  TrendingUp,
+  History,
+  Clock,
+  Calendar,
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  ShoppingCart,
 } from 'lucide-react';
 import { useMediGuard } from '../../context/MediGuardContext';
 import { StatusBadge, StatusBadgeVariant } from '../common/StatusBadge';
@@ -39,6 +47,8 @@ export const InventoryView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [expandedMedicineId, setExpandedMedicineId] = useState<string | null>(null);
+  const [medicineDetailTabs, setMedicineDetailTabs] = useState<Record<string, 'batches' | 'history'>>({});
+  const [historyTypeFilters, setHistoryTypeFilters] = useState<Record<string, string>>({});
 
   // Movement Modal State
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
@@ -93,6 +103,59 @@ export const InventoryView: React.FC = () => {
           locationBalances: batchBalances,
         };
       });
+  };
+
+  // Map medicine movement & daily sales history
+  const getMedicineHistory = (medId: string, medBatches: any[], totalMedStock: number) => {
+    const batchIds = new Set(medBatches.map((b) => b.id));
+    const medMovements = movements
+      .filter((m) => batchIds.has(m.batchId))
+      .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+
+    const dispensations = medMovements.filter((m) => m.type === 'ISSUE');
+    const todayStr = rules.demoFixedDate || '2026-10-24';
+
+    const soldToday = dispensations
+      .filter((m) => m.occurredAt.startsWith(todayStr))
+      .reduce((sum, m) => sum + m.quantity, 0);
+
+    // 7-day daily breakdown
+    const baseDate = new Date(`${todayStr}T00:00:00Z`);
+    const days = [6, 5, 4, 3, 2, 1, 0].map((offset) => {
+      const d = new Date(baseDate);
+      d.setDate(d.getDate() - offset);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = offset === 0 ? 'Today' : offset === 1 ? 'Yest' : d.toLocaleDateString('en-US', { weekday: 'short' });
+      const shortDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const sold = dispensations
+        .filter((m) => m.occurredAt.startsWith(dateStr))
+        .reduce((sum, m) => sum + m.quantity, 0);
+      return {
+        dateStr,
+        dayName,
+        shortDate,
+        sold,
+        isToday: offset === 0,
+      };
+    });
+
+    const totalSold7d = days.reduce((sum, d) => sum + d.sold, 0);
+    const avgDailySales = totalSold7d > 0 ? +(totalSold7d / 7).toFixed(1) : 0;
+    const maxSoldIn7d = Math.max(...days.map((d) => d.sold), 1);
+
+    // Stock runway (days)
+    const runwayDays = avgDailySales > 0 ? Math.round(totalMedStock / avgDailySales) : (totalMedStock > 0 ? 999 : 0);
+
+    return {
+      medMovements,
+      dispensations,
+      soldToday,
+      days,
+      totalSold7d,
+      avgDailySales,
+      maxSoldIn7d,
+      runwayDays,
+    };
   };
 
   const mapExpiryBandToVariant = (band: string): StatusBadgeVariant => {
@@ -347,7 +410,7 @@ export const InventoryView: React.FC = () => {
                     <th className="py-3 px-3">Category</th>
                     <th className="py-3 px-3">Storage</th>
                     <th className="py-3 px-3 text-right">Active Batches</th>
-                    <th className="py-3 px-3 text-right">On-Hand Stock</th>
+                    <th className="py-3 px-3 text-right">Stock & Daily Sales</th>
                     <th className="py-3 px-3 text-right">Unit Price</th>
                     <th className="py-3 px-4 text-center">Action</th>
                   </tr>
@@ -356,8 +419,17 @@ export const InventoryView: React.FC = () => {
                   {filteredMedicines.map((med) => {
                     const medBatches = getMedicineBatches(med.id);
                     const totalMedStock = medBatches.reduce((acc, curr) => acc + curr.totalOnHand, 0);
+                    const medHistory = getMedicineHistory(med.id, medBatches, totalMedStock);
                     const isExpanded = expandedMedicineId === med.id;
                     const displayName = med.brandName || med.genericName;
+                    const currentSubTab = medicineDetailTabs[med.id] || 'batches';
+                    const historyFilter = historyTypeFilters[med.id] || 'ALL';
+
+                    // Filtered movements for this medicine
+                    const displayedMovements = medHistory.medMovements.filter((m) => {
+                      if (historyFilter === 'ALL') return true;
+                      return m.type === historyFilter;
+                    });
 
                     return (
                       <React.Fragment key={med.id}>
@@ -412,6 +484,18 @@ export const InventoryView: React.FC = () => {
                             >
                               {totalMedStock} {med.unit}
                             </span>
+                            <div className="text-[11px] font-mono mt-0.5 flex items-center justify-end gap-1.5">
+                              {medHistory.soldToday > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 text-[10px]">
+                                  <TrendingUp className="w-2.5 h-2.5" />
+                                  <span>{medHistory.soldToday} sold today</span>
+                                </span>
+                              ) : (
+                                <span className="text-[#78716C] text-[10px]">
+                                  Avg: {medHistory.avgDailySales}/day
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           <td className="py-3.5 px-3 text-right font-mono text-xs text-[#1C1917]">
@@ -421,101 +505,452 @@ export const InventoryView: React.FC = () => {
                           <td className="py-3.5 px-4 text-center">
                             <button
                               type="button"
-                              className="text-xs text-[#C2410C] hover:text-[#9A3412] font-medium"
+                              className="inline-flex items-center gap-1 text-xs text-[#C2410C] hover:text-[#9A3412] font-semibold px-2.5 py-1 rounded-md hover:bg-orange-50 border border-transparent hover:border-orange-200 transition-colors"
                             >
-                              {isExpanded ? 'Hide Batches' : 'View Batches'}
+                              <span>{isExpanded ? 'Hide Details' : 'View Batches & Sales'}</span>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                             </button>
                           </td>
                         </tr>
 
-                        {/* Expandable Batches Row */}
+                        {/* Expandable Batches & Medicine Sales History Row */}
                         {isExpanded && (
                           <tr>
                             <td colSpan={7} className="p-0 bg-[#FAFAF9]">
-                              <div className="p-4 pl-14 border-y border-[#E7E5E4] space-y-3">
-                                <div className="text-xs font-semibold text-[#78716C] uppercase tracking-wider">
-                                  Batch Breakdown (FEFO Order — Earliest Expiry First)
+                              <div className="p-4 pl-12 border-y border-[#E7E5E4] space-y-4">
+                                {/* Sub-navigation Tabs & Quick Record Action */}
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#E7E5E4] pb-3">
+                                  <div className="flex items-center gap-1 p-1 bg-white border border-[#E7E5E4] rounded-lg">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMedicineDetailTabs((prev) => ({ ...prev, [med.id]: 'batches' }));
+                                      }}
+                                      className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors ${
+                                        currentSubTab === 'batches'
+                                          ? 'bg-[#C2410C] text-white shadow-xs'
+                                          : 'text-[#78716C] hover:text-[#1C1917]'
+                                      }`}
+                                    >
+                                      <Layers className="w-3.5 h-3.5" />
+                                      <span>Active Batches (FEFO Order)</span>
+                                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 font-mono">
+                                        {medBatches.length}
+                                      </span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMedicineDetailTabs((prev) => ({ ...prev, [med.id]: 'history' }));
+                                      }}
+                                      className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors ${
+                                        currentSubTab === 'history'
+                                          ? 'bg-[#C2410C] text-white shadow-xs'
+                                          : 'text-[#78716C] hover:text-[#1C1917]'
+                                      }`}
+                                    >
+                                      <History className="w-3.5 h-3.5" />
+                                      <span>Sales Velocity & Movement History</span>
+                                      {medHistory.soldToday > 0 && (
+                                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-600 text-white font-mono font-bold">
+                                          +{medHistory.soldToday} today
+                                        </span>
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const earliestBatch = medBatches[0];
+                                        if (earliestBatch) {
+                                          setSelectedBatchId(earliestBatch.id);
+                                          setMovementType('ISSUE');
+                                          setMovementReason(`Daily prescription & counter sales for ${displayName}`);
+                                          setMovementQty(1);
+                                          setIsMovementModalOpen(true);
+                                        }
+                                      }}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#C2410C] hover:bg-[#9A3412] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                                    >
+                                      <ShoppingCart className="w-3.5 h-3.5" />
+                                      <span>+ Record Dispensation / Daily Sale</span>
+                                    </button>
+                                  </div>
                                 </div>
 
-                                <div className="bg-white rounded-lg border border-[#E7E5E4] overflow-hidden">
-                                  <table className="w-full text-left border-collapse text-xs">
-                                    <thead>
-                                      <tr className="bg-[#F5F5F4] border-b border-[#E7E5E4] text-[10px] text-[#78716C] uppercase">
-                                        <th className="py-2 px-3">Batch Code</th>
-                                        <th className="py-2 px-3">Barcode (GS1)</th>
-                                        <th className="py-2 px-3">Expiry Date</th>
-                                        <th className="py-2 px-3">Expiry Band</th>
-                                        <th className="py-2 px-3">Days Left</th>
-                                        <th className="py-2 px-3">Location Balances</th>
-                                        <th className="py-2 px-3 text-right">Total Qty</th>
-                                        <th className="py-2 px-3 text-right">Action</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[#E7E5E4]">
-                                      {medBatches.map((b) => (
-                                        <tr key={b.id} className="hover:bg-[#FFF7ED]/50 transition-colors">
-                                          <td className="py-2.5 px-3 font-mono font-medium text-[#1C1917]">
-                                            {b.batchCode}
-                                          </td>
-                                          <td className="py-2 px-3">
-                                            <MedicineBarcodeSVG code={b.batchCode} width={110} height={34} />
-                                          </td>
-                                          <td className="py-2.5 px-3 text-[#1C1917]">{b.expiresOn}</td>
-                                          <td className="py-2.5 px-3">
-                                            <StatusBadge
-                                              variant={mapExpiryBandToVariant(b.expiry.band)}
-                                              text={b.expiry.label}
-                                            />
-                                          </td>
-                                          <td className="py-2.5 px-3 font-mono tabular-nums">
-                                            <span
-                                              className={
-                                                b.expiry.daysToExpiry <= 15
-                                                  ? 'text-[#B91C1C] font-semibold'
-                                                  : b.expiry.daysToExpiry <= 30
-                                                  ? 'text-[#A16207]'
-                                                  : 'text-[#1C1917]'
-                                              }
+                                {/* SUB-TAB 1: BATCH BREAKDOWN (FEFO) */}
+                                {currentSubTab === 'batches' && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between text-xs text-[#78716C]">
+                                      <span className="font-semibold uppercase tracking-wider">
+                                        Earliest Expiry First (FEFO Safe Dispensation Priority)
+                                      </span>
+                                      <span>{medBatches.length} active batch allocations</span>
+                                    </div>
+
+                                    <div className="bg-white rounded-lg border border-[#E7E5E4] overflow-hidden shadow-xs">
+                                      <table className="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                          <tr className="bg-[#F5F5F4] border-b border-[#E7E5E4] text-[10px] text-[#78716C] uppercase">
+                                            <th className="py-2.5 px-3">Batch Code</th>
+                                            <th className="py-2.5 px-3">Barcode (GS1)</th>
+                                            <th className="py-2.5 px-3">Expiry Date</th>
+                                            <th className="py-2.5 px-3">Expiry Band</th>
+                                            <th className="py-2.5 px-3">Days Left</th>
+                                            <th className="py-2.5 px-3">Location Balances</th>
+                                            <th className="py-2.5 px-3 text-right">Total Qty</th>
+                                            <th className="py-2.5 px-3 text-right">Action</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[#E7E5E4]">
+                                          {medBatches.map((b) => (
+                                            <tr key={b.id} className="hover:bg-[#FFF7ED]/50 transition-colors">
+                                              <td className="py-2.5 px-3 font-mono font-medium text-[#1C1917]">
+                                                {b.batchCode}
+                                              </td>
+                                              <td className="py-2 px-3">
+                                                <MedicineBarcodeSVG code={b.batchCode} width={110} height={34} />
+                                              </td>
+                                              <td className="py-2.5 px-3 text-[#1C1917]">{b.expiresOn}</td>
+                                              <td className="py-2.5 px-3">
+                                                <StatusBadge
+                                                  variant={mapExpiryBandToVariant(b.expiry.band)}
+                                                  text={b.expiry.label}
+                                                />
+                                              </td>
+                                              <td className="py-2.5 px-3 font-mono tabular-nums">
+                                                <span
+                                                  className={
+                                                    b.expiry.daysToExpiry <= 15
+                                                      ? 'text-[#B91C1C] font-semibold'
+                                                      : b.expiry.daysToExpiry <= 30
+                                                      ? 'text-[#A16207]'
+                                                      : 'text-[#1C1917]'
+                                                  }
+                                                >
+                                                  {b.expiry.daysToExpiry} days
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 px-3">
+                                                <div className="flex flex-wrap gap-1.5">
+                                                  {b.locationBalances.map((lb) => {
+                                                    const loc = locations.find((l) => l.id === lb.locationId);
+                                                    return (
+                                                      <span
+                                                        key={`${lb.batchId}_${lb.locationId}`}
+                                                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-[#FAFAF9] border border-[#E7E5E4] text-[#1C1917]"
+                                                      >
+                                                        <span className="text-[#78716C]">{loc?.name.split(' ')[0]}:</span>
+                                                        <strong className="font-mono">{lb.quantity}</strong>
+                                                      </span>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </td>
+                                              <td className="py-2.5 px-3 text-right font-mono font-semibold tabular-nums text-[#1C1917]">
+                                                {b.totalOnHand}
+                                              </td>
+                                              <td className="py-2.5 px-3 text-right">
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedBatchId(b.id);
+                                                    setIsMovementModalOpen(true);
+                                                  }}
+                                                  className="text-xs text-[#C2410C] hover:underline font-medium"
+                                                >
+                                                  Move / Issue
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* SUB-TAB 2: SALES VELOCITY & MOVEMENT HISTORY */}
+                                {currentSubTab === 'history' && (
+                                  <div className="space-y-4">
+                                    {/* 4 KPI Cards Ribbon */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                      {/* Card 1: Sold Today */}
+                                      <div className="bg-white rounded-xl border border-emerald-200 p-3.5 shadow-xs">
+                                        <div className="flex items-center justify-between text-xs text-[#78716C]">
+                                          <span>Sold Today</span>
+                                          <TrendingUp className="w-4 h-4 text-emerald-600" />
+                                        </div>
+                                        <div className="text-xl font-bold font-mono text-emerald-700 mt-1">
+                                          {medHistory.soldToday} <span className="text-xs font-normal text-[#78716C]">{med.unit}s</span>
+                                        </div>
+                                        <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">
+                                          Logged on {rules.demoFixedDate || '2026-10-24'}
+                                        </div>
+                                      </div>
+
+                                      {/* Card 2: Average Daily Sales */}
+                                      <div className="bg-white rounded-xl border border-orange-200 p-3.5 shadow-xs">
+                                        <div className="flex items-center justify-between text-xs text-[#78716C]">
+                                          <span>Daily Velocity</span>
+                                          <Activity className="w-4 h-4 text-[#C2410C]" />
+                                        </div>
+                                        <div className="text-xl font-bold font-mono text-[#C2410C] mt-1">
+                                          {medHistory.avgDailySales} <span className="text-xs font-normal text-[#78716C]">{med.unit}s/day</span>
+                                        </div>
+                                        <div className="text-[10px] text-[#78716C] mt-0.5">
+                                          7-day moving consumption rate
+                                        </div>
+                                      </div>
+
+                                      {/* Card 3: 7-Day Dispensation Total */}
+                                      <div className="bg-white rounded-xl border border-[#E7E5E4] p-3.5 shadow-xs">
+                                        <div className="flex items-center justify-between text-xs text-[#78716C]">
+                                          <span>7-Day Volume</span>
+                                          <Clock className="w-4 h-4 text-[#78716C]" />
+                                        </div>
+                                        <div className="text-xl font-bold font-mono text-[#1C1917] mt-1">
+                                          {medHistory.totalSold7d} <span className="text-xs font-normal text-[#78716C]">{med.unit}s</span>
+                                        </div>
+                                        <div className="text-[10px] text-[#78716C] mt-0.5">
+                                          Total ~{formatPaiseINR(medHistory.totalSold7d * med.unitCostPaise)} value
+                                        </div>
+                                      </div>
+
+                                      {/* Card 4: Stock Runway */}
+                                      <div className="bg-white rounded-xl border border-[#E7E5E4] p-3.5 shadow-xs">
+                                        <div className="flex items-center justify-between text-xs text-[#78716C]">
+                                          <span>Stock Runway</span>
+                                          <Calendar className="w-4 h-4 text-[#78716C]" />
+                                        </div>
+                                        <div className="text-xl font-bold font-mono mt-1">
+                                          <span
+                                            className={
+                                              medHistory.runwayDays <= 7
+                                                ? 'text-[#B91C1C]'
+                                                : medHistory.runwayDays <= 15
+                                                ? 'text-[#C2410C]'
+                                                : 'text-emerald-700'
+                                            }
+                                          >
+                                            {medHistory.runwayDays === 999 ? 'Ample' : `${medHistory.runwayDays} Days`}
+                                          </span>
+                                        </div>
+                                        <div className="text-[10px] text-[#78716C] mt-0.5">
+                                          Until stockout at current velocity
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* 7-Day Daily Sales Velocity Bar Chart */}
+                                    <div className="bg-white rounded-xl border border-[#E7E5E4] p-4 shadow-xs space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <div className="text-xs font-bold text-[#1C1917] uppercase tracking-wider flex items-center gap-1.5">
+                                            <Activity className="w-3.5 h-3.5 text-[#C2410C]" />
+                                            <span>7-Day Daily Dispensation Velocity (Units Sold Per Day)</span>
+                                          </div>
+                                          <div className="text-[11px] text-[#78716C] mt-0.5">
+                                            Daily prescription issues and retail patient sales recorded in ledger
+                                          </div>
+                                        </div>
+                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#C2410C] font-semibold border border-[#FFEDD5]">
+                                          Avg: {medHistory.avgDailySales} units/day
+                                        </span>
+                                      </div>
+
+                                      {/* Bar Chart Columns */}
+                                      <div className="grid grid-cols-7 gap-2 pt-2">
+                                        {medHistory.days.map((d) => {
+                                          const heightPercent =
+                                            medHistory.maxSoldIn7d > 0
+                                              ? Math.max(14, Math.round((d.sold / medHistory.maxSoldIn7d) * 100))
+                                              : 14;
+
+                                          return (
+                                            <div
+                                              key={d.dateStr}
+                                              className="flex flex-col items-center justify-end space-y-1 group"
                                             >
-                                              {b.expiry.daysToExpiry} days
-                                            </span>
-                                          </td>
-                                          <td className="py-2.5 px-3">
-                                            <div className="flex flex-wrap gap-1.5">
-                                              {b.locationBalances.map((lb) => {
-                                                const loc = locations.find((l) => l.id === lb.locationId);
-                                                return (
-                                                  <span
-                                                    key={`${lb.batchId}_${lb.locationId}`}
-                                                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-[#FAFAF9] border border-[#E7E5E4] text-[#1C1917]"
-                                                  >
-                                                    <span className="text-[#78716C]">{loc?.name.split(' ')[0]}:</span>
-                                                    <strong className="font-mono">{lb.quantity}</strong>
-                                                  </span>
-                                                );
-                                              })}
+                                              {/* Units Sold Pill */}
+                                              <span
+                                                className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded transition-transform group-hover:scale-110 ${
+                                                  d.isToday
+                                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                                    : d.sold > 0
+                                                    ? 'bg-[#FFF7ED] text-[#C2410C] border border-[#FFEDD5]'
+                                                    : 'text-[#A8A29E]'
+                                                }`}
+                                              >
+                                                {d.sold}
+                                              </span>
+
+                                              {/* Bar Column Container */}
+                                              <div className="w-full h-24 bg-[#FAFAF9] rounded-lg p-1 flex items-end justify-center border border-[#E7E5E4]">
+                                                <div
+                                                  style={{ height: `${heightPercent}%` }}
+                                                  className={`w-full rounded-md transition-all duration-300 ${
+                                                    d.isToday
+                                                      ? 'bg-gradient-to-t from-emerald-600 to-teal-500 shadow-sm'
+                                                      : d.sold > 0
+                                                      ? 'bg-gradient-to-t from-[#EA580C] to-orange-400 group-hover:from-[#C2410C] group-hover:to-orange-500'
+                                                      : 'bg-stone-200'
+                                                  }`}
+                                                />
+                                              </div>
+
+                                              {/* Date Label */}
+                                              <div className="text-center pt-0.5">
+                                                <div
+                                                  className={`text-[11px] leading-tight ${
+                                                    d.isToday
+                                                      ? 'font-bold text-emerald-700'
+                                                      : 'font-medium text-[#1C1917]'
+                                                  }`}
+                                                >
+                                                  {d.dayName}
+                                                </div>
+                                                <div className="text-[9px] text-[#78716C] leading-tight">
+                                                  {d.shortDate}
+                                                </div>
+                                              </div>
                                             </div>
-                                          </td>
-                                          <td className="py-2.5 px-3 text-right font-mono font-semibold tabular-nums text-[#1C1917]">
-                                            {b.totalOnHand}
-                                          </td>
-                                          <td className="py-2.5 px-3 text-right">
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    {/* Movement & Dispensation Ledger */}
+                                    <div className="bg-white rounded-xl border border-[#E7E5E4] overflow-hidden shadow-xs space-y-2 p-3.5">
+                                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                        <div>
+                                          <div className="text-xs font-bold text-[#1C1917] uppercase tracking-wider flex items-center gap-1.5">
+                                            <History className="w-3.5 h-3.5 text-[#C2410C]" />
+                                            <span>Detailed Movement & Sales Ledger</span>
+                                          </div>
+                                          <div className="text-[11px] text-[#78716C] mt-0.5">
+                                            Audited transaction history for all batches of {displayName}
+                                          </div>
+                                        </div>
+
+                                        {/* Filter Type Pills */}
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                          {['ALL', 'ISSUE', 'RECEIPT', 'TRANSFER'].map((fType) => (
                                             <button
+                                              key={fType}
+                                              type="button"
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                setSelectedBatchId(b.id);
-                                                setIsMovementModalOpen(true);
+                                                setHistoryTypeFilters((prev) => ({
+                                                  ...prev,
+                                                  [med.id]: fType,
+                                                }));
                                               }}
-                                              className="text-xs text-[#C2410C] hover:underline font-medium"
+                                              className={`px-2.5 py-1 text-[10px] font-semibold rounded-md transition-colors ${
+                                                historyFilter === fType
+                                                  ? 'bg-[#C2410C] text-white shadow-xs'
+                                                  : 'bg-[#FAFAF9] text-[#78716C] border border-[#E7E5E4] hover:text-[#1C1917]'
+                                              }`}
                                             >
-                                              Move / Issue
+                                              {fType === 'ALL'
+                                                ? `All (${medHistory.medMovements.length})`
+                                                : fType === 'ISSUE'
+                                                ? `Sales & Issues (${medHistory.dispensations.length})`
+                                                : fType === 'RECEIPT'
+                                                ? 'Receipts'
+                                                : 'Transfers'}
                                             </button>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* Transaction Table */}
+                                      {displayedMovements.length === 0 ? (
+                                        <div className="p-4 text-center text-xs text-[#78716C] bg-[#FAFAF9] rounded-lg border border-dashed border-[#E7E5E4]">
+                                          No transactions recorded under filter "{historyFilter}". Click "+ Record Dispensation" above to log a sale.
+                                        </div>
+                                      ) : (
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full text-left border-collapse text-xs">
+                                            <thead>
+                                              <tr className="bg-[#F5F5F4] border-b border-[#E7E5E4] text-[10px] text-[#78716C] uppercase">
+                                                <th className="py-2 px-3">Date & Time</th>
+                                                <th className="py-2 px-3">Type</th>
+                                                <th className="py-2 px-3">Batch</th>
+                                                <th className="py-2 px-3 text-right">Qty Change</th>
+                                                <th className="py-2 px-3">Location (From / To)</th>
+                                                <th className="py-2 px-3">Clinical Reason / Notes</th>
+                                                <th className="py-2 px-3">Logged By</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[#E7E5E4]">
+                                              {displayedMovements.map((m) => {
+                                                const batch = batches.find((b) => b.id === m.batchId);
+                                                const srcLoc = locations.find((l) => l.id === m.fromLocationId);
+                                                const dstLoc = locations.find((l) => l.id === m.toLocationId);
+                                                const formattedDate = m.occurredAt.replace('T', ' ').substring(0, 16);
+
+                                                return (
+                                                  <tr key={m.id} className="hover:bg-[#FFF7ED]/30 transition-colors">
+                                                    <td className="py-2 px-3 font-mono text-[11px] text-[#78716C] whitespace-nowrap">
+                                                      {formattedDate}
+                                                    </td>
+                                                    <td className="py-2 px-3">
+                                                      <span
+                                                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                                                          m.type === 'ISSUE'
+                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                            : m.type === 'RECEIPT'
+                                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                            : m.type === 'TRANSFER'
+                                                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                                            : 'bg-stone-100 text-stone-700 border-stone-200'
+                                                        }`}
+                                                      >
+                                                        {m.type === 'ISSUE' ? 'SALE / ISSUE' : m.type}
+                                                      </span>
+                                                    </td>
+                                                    <td className="py-2 px-3 font-mono font-medium text-[#1C1917]">
+                                                      {batch?.batchCode || m.batchId}
+                                                    </td>
+                                                    <td className="py-2 px-3 text-right font-mono font-bold tabular-nums">
+                                                      <span
+                                                        className={
+                                                          m.type === 'ISSUE' || m.type === 'DISPOSAL'
+                                                            ? 'text-[#B91C1C]'
+                                                            : 'text-emerald-700'
+                                                        }
+                                                      >
+                                                        {m.type === 'ISSUE' || m.type === 'DISPOSAL' ? `-${m.quantity}` : `+${m.quantity}`} {med.unit}
+                                                      </span>
+                                                    </td>
+                                                    <td className="py-2 px-3 text-[#78716C] text-[11px]">
+                                                      {srcLoc?.name ? srcLoc.name.split(' ')[0] : 'Inward'}{' '}
+                                                      &rarr;{' '}
+                                                      {dstLoc?.name ? dstLoc.name.split(' ')[0] : 'Patient / Dispensed'}
+                                                    </td>
+                                                    <td className="py-2 px-3 text-[#1C1917] max-w-xs truncate" title={m.reason}>
+                                                      {m.reason}
+                                                    </td>
+                                                    <td className="py-2 px-3 text-[#78716C] text-[11px]">
+                                                      {m.actorId.replace('USER-', '')}
+                                                    </td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>

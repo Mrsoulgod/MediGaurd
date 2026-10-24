@@ -23,6 +23,7 @@ import {
   SEED_SUPPLIERS,
   SEED_BATCHES,
   SEED_BALANCES,
+  SEED_MOVEMENTS,
   SEED_USERS,
   SEED_SHARED_LISTINGS,
   DEFAULT_RULES,
@@ -245,20 +246,17 @@ export const MediGuardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const [movements, setMovements] = useState<StockMovement[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.MOVEMENTS);
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'MOV-INIT-001',
-        idempotencyKey: 'INIT-KEY-001',
-        batchId: 'BATCH-CTX-HERO',
-        type: 'RECEIPT',
-        fromLocationId: null,
-        toLocationId: 'LOC-CENTRAL',
-        quantity: 400,
-        actorId: 'USER-SUPERADMIN',
-        occurredAt: `${DEFAULT_RULES.demoFixedDate}T08:00:00Z`,
-        reason: 'Initial verified stock intake by Central Pharmacy',
-      },
-    ];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 3) {
+          return parsed;
+        }
+      } catch (e) {
+        // fallback
+      }
+    }
+    return SEED_MOVEMENTS;
   });
 
   const [transferRequests, setTransferRequests] = useState<TransferRequest[]>(() => {

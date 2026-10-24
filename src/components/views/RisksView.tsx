@@ -9,6 +9,10 @@ import {
   X,
   ArrowRight,
   Sparkles,
+  Flame,
+  Calendar,
+  Share2,
+  Tag,
 } from 'lucide-react';
 import { useMediGuard } from '../../context/MediGuardContext';
 import { StatusBadge, StatusBadgeVariant } from '../common/StatusBadge';
@@ -29,10 +33,14 @@ export const RisksView: React.FC = () => {
     selectedLocationId,
     proposeTransfer,
     decideTransfer,
+    postSharedListing,
   } = useMediGuard();
 
   // Tabs: Expiry vs Shortage (never merged into one score per DESIGN.md §4)
   const [riskTab, setRiskTab] = useState<'expiry' | 'shortage'>('expiry');
+
+  // Expiry Segmentation Filter: 20 vs 30 vs 60 days window
+  const [expiryWindowFilter, setExpiryWindowFilter] = useState<'ALL' | 'LE_20' | '21_30' | '31_60'>('ALL');
 
   // Side Drawer state for selected batch/medicine
   const [selectedDrawerItem, setSelectedDrawerItem] = useState<{
@@ -62,7 +70,7 @@ export const RisksView: React.FC = () => {
         const dailyBurnRate = 3.8;
         const projectedConsumed = Math.min(totalOnHand, Math.round(dailyBurnRate * Math.max(0, expiry.daysToExpiry)));
         const projectedUnconsumed = Math.max(0, totalOnHand - projectedConsumed);
-        const projectedAtRiskPaise = projectedUnconsumed * (med?.unitCostPaise || 0);
+        const projectedAtRiskPaise = projectedUnconsumed * (med?.unitCostPaise || b.unitCostPaise || 0);
 
         return {
           ...b,
@@ -77,6 +85,33 @@ export const RisksView: React.FC = () => {
       .filter((b) => b.totalOnHand > 0 && b.expiry.daysToExpiry <= 60)
       .sort((a, b) => a.expiry.daysToExpiry - b.expiry.daysToExpiry);
   }, [batches, medicines, balances, rules, selectedLocationId]);
+
+  // Expiry Segments: ≤20 Days, 21-30 Days, 31-60 Days
+  const expiryBuckets = useMemo(() => {
+    const bucket20 = expiryBatches.filter((b) => b.expiry.daysToExpiry > 0 && b.expiry.daysToExpiry <= 20);
+    const bucket30 = expiryBatches.filter((b) => b.expiry.daysToExpiry >= 21 && b.expiry.daysToExpiry <= 30);
+    const bucket60 = expiryBatches.filter((b) => b.expiry.daysToExpiry >= 31 && b.expiry.daysToExpiry <= 60);
+
+    const val20 = bucket20.reduce((sum, b) => sum + b.projectedAtRiskPaise, 0);
+    const val30 = bucket30.reduce((sum, b) => sum + b.projectedAtRiskPaise, 0);
+    const val60 = bucket60.reduce((sum, b) => sum + b.projectedAtRiskPaise, 0);
+
+    return {
+      bucket20,
+      bucket30,
+      bucket60,
+      val20,
+      val30,
+      val60,
+    };
+  }, [expiryBatches]);
+
+  const displayedExpiryBatches = useMemo(() => {
+    if (expiryWindowFilter === 'LE_20') return expiryBuckets.bucket20;
+    if (expiryWindowFilter === '21_30') return expiryBuckets.bucket30;
+    if (expiryWindowFilter === '31_60') return expiryBuckets.bucket60;
+    return expiryBatches;
+  }, [expiryBatches, expiryBuckets, expiryWindowFilter]);
 
   // Shortage Risk Medicines
   const shortageMedicines = useMemo(() => {
@@ -405,95 +440,343 @@ export const RisksView: React.FC = () => {
         </div>
       )}
 
-      {/* RISK TABLE: EXPIRY TAB */}
+      {/* RISK TABLE: EXPIRY TAB (SEGMENTED 20, 30, 60 DAYS FOCUS) */}
       {riskTab === 'expiry' && (
-        <div className="bg-white border border-[#E7E5E4] rounded-lg overflow-hidden shadow-sm space-y-2">
-          <div className="p-4 border-b border-[#E7E5E4] flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-[#1C1917]">Near-Expiry Batches (≤ 60 Days Window)</h3>
-              <p className="text-xs text-[#78716C] mt-0.5">
-                Ranked by projected waste value. Click row to open decision evidence drawer.
-              </p>
+        <div className="space-y-4">
+          {/* Expiry Window Focus Cards: 20d, 30d, 60d */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {/* Card 1: <= 20 Days Focus */}
+            <div
+              onClick={() => setExpiryWindowFilter(expiryWindowFilter === 'LE_20' ? 'ALL' : 'LE_20')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all card-hover-lift flex flex-col justify-between space-y-2 ${
+                expiryWindowFilter === 'LE_20'
+                  ? 'bg-red-50/70 border-[#B91C1C] ring-2 ring-[#B91C1C]/20 shadow-xs'
+                  : 'bg-white border-[#E7E5E4] hover:border-[#B91C1C]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#B91C1C] flex items-center gap-1.5 uppercase tracking-wider">
+                  <Flame className="w-4 h-4 text-[#B91C1C] animate-pulse" />
+                  <span>Next ≤ 20 Days</span>
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FEE2E2] text-[#B91C1C] font-bold border border-[#FECACA]">
+                  {expiryBuckets.bucket20.length} Batches
+                </span>
+              </div>
+              <div>
+                <div className="text-2xl font-bold font-mono text-[#B91C1C] tabular-nums">
+                  {formatPaiseINR(expiryBuckets.val20)}
+                </div>
+                <div className="text-[11px] text-[#78716C] mt-0.5 font-medium">
+                  Emergency Action: Liquidation, 50% chemist discount, or immediate ICU consumption.
+                </div>
+              </div>
+              <div className="text-[10px] text-[#B91C1C] font-semibold pt-1 border-t border-red-100 flex items-center justify-between">
+                <span>{expiryWindowFilter === 'LE_20' ? 'Active Focus (Click to reset)' : 'Click to isolate ≤20d batches'}</span>
+                <ArrowRight className="w-3 h-3" />
+              </div>
             </div>
-            <span className="text-xs font-mono text-[#78716C]">FEFO Sorted</span>
+
+            {/* Card 2: 21–30 Days Focus */}
+            <div
+              onClick={() => setExpiryWindowFilter(expiryWindowFilter === '21_30' ? 'ALL' : '21_30')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all card-hover-lift flex flex-col justify-between space-y-2 ${
+                expiryWindowFilter === '21_30'
+                  ? 'bg-orange-50/70 border-[#C2410C] ring-2 ring-[#C2410C]/20 shadow-xs'
+                  : 'bg-white border-[#E7E5E4] hover:border-[#C2410C]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#C2410C] flex items-center gap-1.5 uppercase tracking-wider">
+                  <Clock className="w-4 h-4 text-[#C2410C]" />
+                  <span>Next 21–30 Days</span>
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#C2410C] font-bold border border-[#FFEDD5]">
+                  {expiryBuckets.bucket30.length} Batches
+                </span>
+              </div>
+              <div>
+                <div className="text-2xl font-bold font-mono text-[#C2410C] tabular-nums">
+                  {formatPaiseINR(expiryBuckets.val30)}
+                </div>
+                <div className="text-[11px] text-[#78716C] mt-0.5 font-medium">
+                  High Urgency: Strict FEFO burn rate enforcement & temporary procurement freeze.
+                </div>
+              </div>
+              <div className="text-[10px] text-[#C2410C] font-semibold pt-1 border-t border-orange-100 flex items-center justify-between">
+                <span>{expiryWindowFilter === '21_30' ? 'Active Focus (Click to reset)' : 'Click to isolate 21–30d batches'}</span>
+                <ArrowRight className="w-3 h-3" />
+              </div>
+            </div>
+
+            {/* Card 3: 31–60 Days Focus */}
+            <div
+              onClick={() => setExpiryWindowFilter(expiryWindowFilter === '31_60' ? 'ALL' : '31_60')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all card-hover-lift flex flex-col justify-between space-y-2 ${
+                expiryWindowFilter === '31_60'
+                  ? 'bg-amber-50/70 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
+                  : 'bg-white border-[#E7E5E4] hover:border-amber-400'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-700 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Calendar className="w-4 h-4 text-amber-600" />
+                  <span>Next 31–60 Days</span>
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-200">
+                  {expiryBuckets.bucket60.length} Batches
+                </span>
+              </div>
+              <div>
+                <div className="text-2xl font-bold font-mono text-amber-800 tabular-nums">
+                  {formatPaiseINR(expiryBuckets.val60)}
+                </div>
+                <div className="text-[11px] text-[#78716C] mt-0.5 font-medium">
+                  Surveillance Window: Monitor patient velocity & plan inter-department transfers.
+                </div>
+              </div>
+              <div className="text-[10px] text-amber-700 font-semibold pt-1 border-t border-amber-100 flex items-center justify-between">
+                <span>{expiryWindowFilter === '31_60' ? 'Active Focus (Click to reset)' : 'Click to isolate 31–60d batches'}</span>
+                <ArrowRight className="w-3 h-3" />
+              </div>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-[#FAFAF9] border-b border-[#E7E5E4] text-[11px] font-semibold text-[#78716C] uppercase">
-                  <th className="py-3 px-4">Medicine & Form</th>
-                  <th className="py-3 px-3">Batch Code</th>
-                  <th className="py-3 px-3">Expiry Date</th>
-                  <th className="py-3 px-3">Days Left</th>
-                  <th className="py-3 px-3 text-right">On-Hand Qty</th>
-                  <th className="py-3 px-3 text-right">Projected Unconsumed</th>
-                  <th className="py-3 px-3 text-right">At-Risk Value (Projected)</th>
-                  <th className="py-3 px-4 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E7E5E4]">
-                {expiryBatches.map((item) => {
-                  const displayName = item.med?.brandName || item.med?.genericName;
+          {/* Segmented Filter Pills */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-[#E7E5E4]">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-[#1C1917] mr-1">Focus Window:</span>
+              <button
+                type="button"
+                onClick={() => setExpiryWindowFilter('ALL')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  expiryWindowFilter === 'ALL'
+                    ? 'bg-[#1C1917] text-white shadow-xs'
+                    : 'bg-[#FAFAF9] text-[#78716C] hover:text-[#1C1917] border border-[#E7E5E4]'
+                }`}
+              >
+                All Expiry Windows (≤ 60d) &bull; {expiryBatches.length}
+              </button>
 
-                  return (
-                    <tr
-                      key={item.id}
-                      onClick={() => setSelectedDrawerItem({ type: 'batch', batchId: item.id })}
-                      className="hover:bg-[#FFF7ED]/50 cursor-pointer transition-colors"
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <img
-                            src={item.med?.image}
-                            alt={displayName}
-                            className="w-8 h-8 rounded object-cover border border-[#E7E5E4]"
-                          />
-                          <div>
-                            <div className="font-semibold text-[#1C1917]">{displayName}</div>
-                            <div className="text-xs text-[#78716C]">{item.med?.genericName}</div>
+              <button
+                type="button"
+                onClick={() => setExpiryWindowFilter('LE_20')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                  expiryWindowFilter === 'LE_20'
+                    ? 'bg-[#B91C1C] text-white shadow-xs'
+                    : 'bg-[#FAFAF9] text-[#B91C1C] hover:bg-red-50 border border-red-200'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5" />
+                <span>Next ≤ 20 Days ({expiryBuckets.bucket20.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExpiryWindowFilter('21_30')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                  expiryWindowFilter === '21_30'
+                    ? 'bg-[#C2410C] text-white shadow-xs'
+                    : 'bg-[#FAFAF9] text-[#C2410C] hover:bg-orange-50 border border-orange-200'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Next 21–30 Days ({expiryBuckets.bucket30.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExpiryWindowFilter('31_60')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                  expiryWindowFilter === '31_60'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-[#FAFAF9] text-amber-700 hover:bg-amber-50 border border-amber-200'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Next 31–60 Days ({expiryBuckets.bucket60.length})</span>
+              </button>
+            </div>
+
+            <div className="text-xs text-[#78716C] font-mono">
+              Showing <strong>{displayedExpiryBatches.length}</strong> of {expiryBatches.length} batches
+            </div>
+          </div>
+
+          {/* Clinical Action Focus Banner */}
+          {expiryWindowFilter !== 'ALL' && (
+            <div
+              className={`p-3.5 rounded-xl border flex items-start gap-3 text-xs animate-in fade-in ${
+                expiryWindowFilter === 'LE_20'
+                  ? 'bg-red-50 border-red-200 text-[#B91C1C]'
+                  : expiryWindowFilter === '21_30'
+                  ? 'bg-orange-50 border-orange-200 text-[#C2410C]'
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <div className="font-bold">
+                  {expiryWindowFilter === 'LE_20'
+                    ? 'Immediate Emergency Expiry Action Protocol (≤ 20 Days)'
+                    : expiryWindowFilter === '21_30'
+                    ? 'Priority Formulary Consumption Protocol (21–30 Days)'
+                    : 'Surveillance & Inter-Department Planning Protocol (31–60 Days)'}
+                </div>
+                <div className="text-[11px] leading-relaxed opacity-90">
+                  {expiryWindowFilter === 'LE_20'
+                    ? 'These medicines will expire within 20 days. Execute immediate inter-ward redistribution to ICU/Emergency or publish at 50% discount on the Local Chemist Peer Network to prevent complete discard loss.'
+                    : expiryWindowFilter === '21_30'
+                    ? 'Formulary lock: Ensure all ward nursing stations consume these specific batches first (strict FEFO). Temporarily block duplicate supplier purchase orders for these SKUs.'
+                    : 'Batches with 31 to 60 days remaining are entering the critical risk window. Review daily ward burn rates and stage inter-department transfer requests.'}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Near Expiry Batches Table */}
+          <div className="bg-white border border-[#E7E5E4] rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="bg-[#FAFAF9] border-b border-[#E7E5E4] text-[11px] font-semibold text-[#78716C] uppercase tracking-wider">
+                    <th className="py-3 px-4">Medicine & Form</th>
+                    <th className="py-3 px-3">Batch Code</th>
+                    <th className="py-3 px-3">Expiry Date</th>
+                    <th className="py-3 px-3">Days Left</th>
+                    <th className="py-3 px-3 text-right">On-Hand Stock</th>
+                    <th className="py-3 px-3 text-right">Projected Waste</th>
+                    <th className="py-3 px-3 text-right">At-Risk Value</th>
+                    <th className="py-3 px-4 text-center">Decisions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E7E5E4]">
+                  {displayedExpiryBatches.map((item) => {
+                    const displayName = item.med?.brandName || item.med?.genericName;
+                    const isLe20 = item.expiry.daysToExpiry <= 20;
+                    const isLe30 = item.expiry.daysToExpiry > 20 && item.expiry.daysToExpiry <= 30;
+
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => setSelectedDrawerItem({ type: 'batch', batchId: item.id })}
+                        className="hover:bg-[#FFF7ED]/50 cursor-pointer transition-colors"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={item.med?.image || 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200&auto=format&fit=crop&q=80'}
+                              alt={displayName}
+                              className="w-9 h-9 rounded-lg object-cover border border-[#E7E5E4] shrink-0"
+                            />
+                            <div>
+                              <div className="font-semibold text-[#1C1917] flex items-center gap-1.5">
+                                <span>{displayName}</span>
+                                {item.med?.storageRequirement === 'COLD_CHAIN' && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                    2–8°C
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-[#78716C]">{item.med?.genericName}</div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="py-3 px-3 font-mono text-xs font-medium text-[#1C1917]">{item.batchCode}</td>
-                      <td className="py-3 px-3 text-xs text-[#1C1917]">{item.expiresOn}</td>
+                        <td className="py-3 px-3 font-mono text-xs font-semibold text-[#1C1917]">{item.batchCode}</td>
+                        <td className="py-3 px-3 text-xs font-mono text-[#1C1917]">{item.expiresOn}</td>
 
-                      <td className="py-3 px-3">
-                        <StatusBadge
-                          variant={mapExpiryBandToVariant(item.expiry.band)}
-                          text={`${item.expiry.daysToExpiry} days`}
-                        />
-                      </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${
+                              isLe20
+                                ? 'bg-red-50 text-[#B91C1C] border-red-200 animate-pulse'
+                                : isLe30
+                                ? 'bg-orange-50 text-[#C2410C] border-orange-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}
+                          >
+                            {isLe20 && <Flame className="w-3.5 h-3.5 text-[#B91C1C]" />}
+                            {isLe30 && <Clock className="w-3.5 h-3.5 text-[#C2410C]" />}
+                            <span>{item.expiry.daysToExpiry} days left</span>
+                          </span>
+                        </td>
 
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-[#1C1917] font-semibold">
-                        {item.totalOnHand}
-                      </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-[#1C1917] font-semibold">
+                          {item.totalOnHand} {item.med?.unit || 'units'}
+                        </td>
 
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-[#B91C1C] font-semibold">
-                        {item.projectedUnconsumed} units
-                      </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-[#B91C1C] font-semibold">
+                          {item.projectedUnconsumed} units
+                        </td>
 
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-[#B91C1C] font-bold">
-                        {formatPaiseINR(item.projectedAtRiskPaise)}
-                      </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-[#B91C1C] font-bold">
+                          {formatPaiseINR(item.projectedAtRiskPaise)}
+                        </td>
 
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDrawerItem({ type: 'batch', batchId: item.id });
-                          }}
-                          className="text-xs text-[#C2410C] hover:underline font-semibold"
-                        >
-                          Inspect
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td className="py-3 px-4 text-center">
+                          <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => {
+                                const cand = mdiCandidates.find((c) => c.batch.id === item.id);
+                                if (cand) {
+                                  setTransferCandidate(cand);
+                                  setTransferQty(cand.recommendedQuantity);
+                                  setTransferNotes(`Transfer candidate: ${cand.evidenceTerms.join(' ')}`);
+                                } else {
+                                  setSelectedDrawerItem({ type: 'batch', batchId: item.id });
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded bg-[#FFF7ED] hover:bg-[#FFEDD5] border border-[#FFEDD5] text-[#C2410C] text-xs font-semibold transition-colors shadow-2xs"
+                              title="Propose inter-department transfer"
+                            >
+                              Transfer
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                postSharedListing({
+                                  medicineName: displayName || item.batchCode,
+                                  medicineSku: item.med?.sku || item.medicineId,
+                                  batchCode: item.batchCode,
+                                  expiresOn: item.expiresOn,
+                                  availableUnits: Math.max(10, Math.floor(item.totalOnHand * 0.4)),
+                                  unitPricePaise: item.unitCostPaise || item.med?.unitCostPaise || 2000,
+                                  discountPercent: isLe20 ? 50 : 30,
+                                  notes: `Urgent near-expiry surplus (${item.expiry.daysToExpiry} days left). Liquidate to peer chemists.`,
+                                });
+                                alert(`Listed ${displayName} (${item.batchCode}) on Chemist Exchange at ${isLe20 ? '50%' : '30%'} discount!`);
+                              }}
+                              className="px-2.5 py-1 rounded bg-white hover:bg-[#FAFAF9] border border-[#E7E5E4] hover:border-[#C2410C] text-[#1C1917] hover:text-[#C2410C] text-xs font-medium transition-colors shadow-2xs flex items-center gap-1"
+                              title="Offer to neighboring chemists"
+                            >
+                              <Share2 className="w-3 h-3 text-[#C2410C]" />
+                              <span>Exchange</span>
+                            </button>
+
+                            <button
+                              onClick={() => setSelectedDrawerItem({ type: 'batch', batchId: item.id })}
+                              className="p-1 rounded text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAFAF9]"
+                              title="Inspect Clinical Evidence"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {displayedExpiryBatches.length === 0 && (
+              <div className="p-8 text-center text-xs text-[#78716C] space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-[#15803D] mx-auto" />
+                <div className="font-semibold text-sm text-[#1C1917]">No batches in this expiry window</div>
+                <p>All items in this bracket have been consumed or safely redistributed.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
