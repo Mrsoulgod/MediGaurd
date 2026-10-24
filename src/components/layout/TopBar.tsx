@@ -53,37 +53,18 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   return (
     <header className="h-16 bg-white border-b border-[#E7E5E4] px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20">
-      {/* Left: Mode Switcher + Hospital Title */}
-      <div className="flex items-center space-x-3">
-        {onSwitchMainView && (
-          <div className="flex items-center mr-2">
-            {activeMainView === 'login' ? (
-              <button
-                onClick={() => onSwitchMainView('landing')}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#E7E5E4] hover:border-[#C2410C] text-[#1C1917] hover:text-[#C2410C] text-xs font-semibold shadow-2xs transition-colors"
-              >
-                <Home className="w-3.5 h-3.5" />
-                <span>Overview</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => onSwitchMainView('login')}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-semibold shadow-xs transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Sign In</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="hidden md:flex flex-col">
-          <div className="text-sm font-bold text-[#1C1917] tracking-tight">{pageTitle}</div>
+      {/* Left: Hospital Title & Branding */}
+      <div
+        onClick={() => onSwitchMainView && onSwitchMainView('landing')}
+        className="flex items-center space-x-3 cursor-pointer select-none"
+      >
+        <div className="flex flex-col">
+          <div className="text-sm font-bold text-[#1C1917] tracking-tight hover:text-[#C2410C] transition-colors">{pageTitle}</div>
           <div className="text-[10px] text-[#78716C] leading-none truncate max-w-xs">{hospitalName}</div>
         </div>
       </div>
 
-      {/* Right: Filters, Gemini AI, Notifications, Customizer, Role Switcher */}
+      {/* Right: Filters, Gemini AI, Notifications, Customizer, Sign In, Role Switcher */}
       <div className="flex items-center space-x-2 sm:space-x-2.5">
         {/* Gemini AI Trigger Button */}
         {onOpenGemini && (
@@ -158,6 +139,29 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Sparkles className="w-3.5 h-3.5" />
           <span>Load scenario</span>
         </button>
+
+        {/* Sign In / Overview Switch Button on the Right */}
+        {onSwitchMainView && (
+          <div className="flex items-center">
+            {activeMainView === 'login' ? (
+              <button
+                onClick={() => onSwitchMainView('landing')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#E7E5E4] hover:border-[#C2410C] text-[#1C1917] hover:text-[#C2410C] text-xs font-semibold shadow-2xs transition-colors"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>Overview</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onSwitchMainView('login')}
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-semibold shadow-xs transition-colors"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Pharmacy Facility / Store Switcher */}
         <div className="flex items-center space-x-2 pl-2 border-l border-[#E7E5E4]">
