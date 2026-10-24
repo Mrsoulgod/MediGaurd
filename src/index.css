@@ -3,8 +3,8 @@
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: #1e293b;
-    background-color: #f8fafc;
+    color: #1c1917;
+    background-color: #fafaf9;
   }
   
   code, pre {
@@ -14,41 +14,104 @@
 
 /* Crisp light theme custom scrollbars */
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f5f5f4;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d6d3d1;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #a8a29e;
 }
 
-/* Orange glow and warm clinical shadows */
+/* Micro-animations and Keyframes */
+@keyframes pulseSlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glowBorder {
+  0%, 100% {
+    border-color: rgba(194, 65, 12, 0.25);
+    box-shadow: 0 0 15px rgba(194, 65, 12, 0.08);
+  }
+  50% {
+    border-color: rgba(194, 65, 12, 0.6);
+    box-shadow: 0 0 25px rgba(194, 65, 12, 0.2);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-float-slow {
+  animation: floatSlow 4s ease-in-out infinite;
+}
+
 .glow-orange {
-  box-shadow: 0 10px 30px -10px rgba(249, 115, 22, 0.25);
+  box-shadow: 0 10px 25px -5px rgba(194, 65, 12, 0.15), 0 8px 10px -6px rgba(194, 65, 12, 0.1);
 }
 
 .glow-orange-subtle {
-  box-shadow: 0 4px 20px -2px rgba(249, 115, 22, 0.12);
+  box-shadow: 0 4px 14px -2px rgba(194, 65, 12, 0.1);
 }
 
 .glow-emerald {
-  box-shadow: 0 10px 30px -10px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 10px 25px -5px rgba(21, 128, 61, 0.15);
+}
+
+.glow-critical {
+  animation: glowBorder 2s ease-in-out infinite;
+}
+
+.shimmer-bar {
+  background: linear-gradient(90deg, rgba(194,65,12,0.15) 25%, rgba(194,65,12,0.35) 50%, rgba(194,65,12,0.15) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2.5s infinite;
 }
 
 .card-hover-lift {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
 }
 
 .card-hover-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(249, 115, 22, 0.08);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.07), 0 4px 10px -2px rgba(194, 65, 12, 0.06);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
 }

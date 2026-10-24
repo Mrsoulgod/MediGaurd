@@ -217,9 +217,9 @@ export const UserProfilesView: React.FC<UserProfilesViewProps> = ({ onSelectAndL
           return (
             <div
               key={profile.id}
-              className={`bg-white rounded-xl border p-6 flex flex-col justify-between space-y-5 transition-all shadow-xs ${
+              className={`bg-white rounded-xl border p-6 flex flex-col justify-between space-y-5 transition-all card-hover-lift shadow-xs ${
                 isCurrentSession
-                  ? 'border-[#C2410C] ring-2 ring-[#C2410C]/20 shadow-sm'
+                  ? 'border-[#C2410C] ring-2 ring-[#C2410C]/20 shadow-sm glow-orange-subtle'
                   : 'border-[#E7E5E4] hover:border-[#C2410C]'
               } ${!profile.active ? 'opacity-60 bg-[#FAFAF9]' : ''}`}
             >

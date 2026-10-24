@@ -261,23 +261,39 @@ export const LocalPharmacyNetworkView: React.FC = () => {
                 listing.unitPricePaise * (1 - listing.discountPercent / 100)
               );
 
+              const med = medicines.find(
+                (m) =>
+                  m.sku.toLowerCase() === listing.medicineSku.toLowerCase() ||
+                  (m.brandName && listing.medicineName.toLowerCase().includes(m.brandName.toLowerCase()))
+              );
+              const imgUrl =
+                med?.image ||
+                'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200&auto=format&fit=crop&q=80';
+
               return (
                 <div
                   key={listing.id}
-                  className={`bg-white rounded-xl border p-5 flex flex-col justify-between space-y-4 transition-all shadow-2xs ${
+                  className={`bg-white rounded-xl border p-5 flex flex-col justify-between space-y-4 card-hover-lift transition-all shadow-2xs ${
                     isMyListing ? 'border-[#C2410C]/40 bg-[#FFF7ED]/20' : 'border-[#E7E5E4] hover:border-[#C2410C]'
                   }`}
                 >
                   {/* Card Top */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-[10px] font-mono text-[#78716C] uppercase tracking-wider">
-                          {listing.medicineSku}
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={imgUrl}
+                          alt={listing.medicineName}
+                          className="w-12 h-12 rounded-xl object-cover border border-[#E7E5E4] shrink-0 shadow-2xs"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-mono text-[#78716C] uppercase tracking-wider">
+                            {listing.medicineSku}
+                          </div>
+                          <h3 className="font-bold text-sm text-[#1C1917] leading-snug truncate">
+                            {listing.medicineName}
+                          </h3>
                         </div>
-                        <h3 className="font-bold text-sm text-[#1C1917] leading-snug">
-                          {listing.medicineName}
-                        </h3>
                       </div>
 
                       {/* Status Badge */}

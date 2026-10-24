@@ -143,26 +143,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onGoToOver
         <button
           type="button"
           onClick={() => handleFacilityChange('LOCAL_PHARMACY')}
-          className={`p-4 rounded-xl border text-left flex items-start gap-4 transition-all ${
+          className={`relative overflow-hidden p-4 rounded-xl border text-left flex items-start gap-4 transition-all card-hover-lift ${
             selectedFacilityType === 'LOCAL_PHARMACY'
               ? 'bg-white border-[#C2410C] ring-2 ring-[#C2410C]/20 shadow-sm'
-              : 'bg-white border-[#E7E5E4] hover:border-[#C2410C] opacity-80'
+              : 'bg-white border-[#E7E5E4] hover:border-[#C2410C] opacity-85'
           }`}
         >
-          <div
-            className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-              selectedFacilityType === 'LOCAL_PHARMACY'
-                ? 'bg-[#FFF7ED] text-[#C2410C]'
-                : 'bg-[#FAFAF9] text-[#78716C]'
-            }`}
-          >
-            <Store className="w-6 h-6" />
+          <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-[#E7E5E4]">
+            <img
+              src="https://images.unsplash.com/photo-1576602976047-174e57a47881?w=200&auto=format&fit=crop&q=80"
+              alt="Local Pharmacy"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-[#C2410C]/10 flex items-center justify-center">
+              <Store className="w-5 h-5 text-white drop-shadow" />
+            </div>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1">
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-[#1C1917]">Local Pharmacy / Chemist</span>
               {selectedFacilityType === 'LOCAL_PHARMACY' && (
-                <span className="w-2 h-2 rounded-full bg-[#C2410C]" />
+                <span className="w-2 h-2 rounded-full bg-[#C2410C] animate-pulse" />
               )}
             </div>
             <div className="text-xs text-[#78716C] leading-relaxed">
@@ -178,26 +179,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onGoToOver
         <button
           type="button"
           onClick={() => handleFacilityChange('HOSPITAL_PHARMACY')}
-          className={`p-4 rounded-xl border text-left flex items-start gap-4 transition-all ${
+          className={`relative overflow-hidden p-4 rounded-xl border text-left flex items-start gap-4 transition-all card-hover-lift ${
             selectedFacilityType === 'HOSPITAL_PHARMACY'
               ? 'bg-white border-[#C2410C] ring-2 ring-[#C2410C]/20 shadow-sm'
-              : 'bg-white border-[#E7E5E4] hover:border-[#C2410C] opacity-80'
+              : 'bg-white border-[#E7E5E4] hover:border-[#C2410C] opacity-85'
           }`}
         >
-          <div
-            className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-              selectedFacilityType === 'HOSPITAL_PHARMACY'
-                ? 'bg-[#FFF7ED] text-[#C2410C]'
-                : 'bg-[#FAFAF9] text-[#78716C]'
-            }`}
-          >
-            <Building2 className="w-6 h-6" />
+          <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-[#E7E5E4]">
+            <img
+              src="https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=200&auto=format&fit=crop&q=80"
+              alt="Hospital Pharmacy"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-[#C2410C]/10 flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-white drop-shadow" />
+            </div>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1">
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-[#1C1917]">Hospital Central Pharmacy</span>
               {selectedFacilityType === 'HOSPITAL_PHARMACY' && (
-                <span className="w-2 h-2 rounded-full bg-[#C2410C]" />
+                <span className="w-2 h-2 rounded-full bg-[#C2410C] animate-pulse" />
               )}
             </div>
             <div className="text-xs text-[#78716C] leading-relaxed">
@@ -387,9 +389,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onGoToOver
                   onClick={() => {
                     setSelectedUserId(profile.id);
                   }}
-                  className={`bg-white rounded-xl border p-4 cursor-pointer transition-all flex flex-col justify-between space-y-3 ${
+                  className={`bg-white rounded-xl border p-4 cursor-pointer transition-all card-hover-lift flex flex-col justify-between space-y-3 ${
                     isSelected
-                      ? 'border-[#C2410C] ring-2 ring-[#C2410C]/20 shadow-xs'
+                      ? 'border-[#C2410C] ring-2 ring-[#C2410C]/20 shadow-xs glow-orange-subtle'
                       : 'border-[#E7E5E4] hover:border-[#C2410C]'
                   }`}
                 >

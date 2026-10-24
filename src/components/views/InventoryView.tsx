@@ -259,6 +259,54 @@ export const InventoryView: React.FC = () => {
       {/* TAB 1: STOCK BALANCES */}
       {activeTab === 'stock' && (
         <div className="space-y-4">
+          {/* Quick Metrics Ribbon */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white rounded-xl border border-[#E7E5E4] p-3.5 card-hover-lift">
+              <div className="text-xs text-[#78716C] flex items-center justify-between">
+                <span>Formulations</span>
+                <Package className="w-4 h-4 text-[#C2410C]" />
+              </div>
+              <div className="text-xl font-bold font-mono text-[#1C1917] mt-1">{medicines.length}</div>
+              <div className="text-[10px] text-[#78716C] mt-0.5">Active catalog SKUs</div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#E7E5E4] p-3.5 card-hover-lift">
+              <div className="text-xs text-[#78716C] flex items-center justify-between">
+                <span>Total Batches</span>
+                <Layers className="w-4 h-4 text-[#C2410C]" />
+              </div>
+              <div className="text-xl font-bold font-mono text-[#1C1917] mt-1">{batches.length}</div>
+              <div className="text-[10px] text-[#78716C] mt-0.5">FEFO tracked batches</div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#E7E5E4] p-3.5 card-hover-lift">
+              <div className="text-xs text-[#78716C] flex items-center justify-between">
+                <span>Cold-Chain (2-8°C)</span>
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              </div>
+              <div className="text-xl font-bold font-mono text-blue-700 mt-1">
+                {medicines.filter((m) => m.storageRequirement === 'COLD_CHAIN').length}
+              </div>
+              <div className="text-[10px] text-blue-600 mt-0.5">Temp-monitored drugs</div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#E7E5E4] p-3.5 card-hover-lift">
+              <div className="text-xs text-[#78716C] flex items-center justify-between">
+                <span>At-Risk (≤60d)</span>
+                <span className="w-2 h-2 rounded-full bg-[#EA580C] animate-pulse" />
+              </div>
+              <div className="text-xl font-bold font-mono text-[#C2410C] mt-1">
+                {
+                  batches.filter((b) => {
+                    const exp = calculateExpiry(b.expiresOn, rules.demoFixedDate, rules);
+                    return exp.daysToExpiry <= 60;
+                  }).length
+                }
+              </div>
+              <div className="text-[10px] text-[#C2410C] mt-0.5">Priority burn window</div>
+            </div>
+          </div>
+
           {/* Search Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-lg border border-[#E7E5E4]">
             <div className="relative w-full sm:w-80">
